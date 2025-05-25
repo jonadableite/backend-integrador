@@ -1,0 +1,129 @@
+// This is your Prisma schema file,
+// learn more about the docs: https://pris.ly/d/prisma-schema
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://prisly.dev/cli/accelerate-init
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String     @id @default(uuid())
+  evoIaUserId String     @unique
+  email       String     @unique
+  name        String
+  isAdmin     Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  instances   Instance[]
+  campaigns   Campaign[]
+}
+
+model Instance {
+  id                String       @id @default(cuid())
+  name              String       @unique
+  evolutionApiId    String       @unique
+  instanceId        String?      @unique // Evolution API's internal instance ID
+  status            String       @default("created") // e.g., created, connecting, connected, disconnected, qrcode, refused
+  integration       String       @default("WHATSAPP-BAILEYS")
+  apiKey            String?      @unique // API Key specific to this instance if not using global
+  profileName       String?
+  profilePictureUrl String?
+  ownerJid          String? // The WhatsApp JID of the connected number
+  lastSeen          DateTime?
+  lastUsedAt        DateTime? // To help with number rotation strategy
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  sendingLogs       SendingLog[]
+
+  @@index([userId])
+  @@index([name])
+  @@index([status])
+}
+
+model ApiToken {
+  id        String    @id @default(cuid())
+  service   String
+  token     String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// New Models for Sending/Campaigns
+
+model Campaign {
+  id                   String       @id @default(cuid())
+  userId               String
+  user                 User         @relation(fields: [userId], references: [id])
+  name                 String
+  status               String       @default("draft") // e.g., draft, pending, running, paused, completed, cancelled
+  messageTextTemplate  String? // Spintax enabled text template
+  messageMediaTemplate Json? // JSON structure for media messages (url, type, caption, etc.)
+  messageButtons       Json? // JSON structure for button messages
+  intervalMin          Int          @default(5) // Minimum delay between messages in seconds
+  intervalMax          Int          @default(15) // Maximum delay between messages in seconds
+  useNumberRotation    Boolean      @default(true) // Whether to rotate sender instances
+  instanceIds          String[] // List of instance IDs to use for this campaign
+  startTime            DateTime? // Scheduled start time
+  endTime              DateTime? // Actual end time
+  totalRecipients      Int          @default(0)
+  sentCount            Int          @default(0)
+  failedCount          Int          @default(0)
+  optedOutCount        Int          @default(0)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  recipients           Recipient[]
+  sendingLogs          SendingLog[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Recipient {
+  id           String       @id @default(cuid())
+  campaignId   String
+  campaign     Campaign     @relation(fields: [campaignId], references: [id])
+  number       String // Recipient's phone number with country code
+  status       String       @default("pending") // e.g., pending, sent, failed, delivered, read, replied, opted-out
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  repliedAt    DateTime?
+  failedReason String?
+  messageId    String? // Evolution API message ID for tracking status updates
+  sendingLogs  SendingLog[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([campaignId])
+  @@index([number])
+  @@index([status])
+}
+
+model SendingLog {
+  id             String    @id @default(cuid())
+  campaignId     String
+  campaign       Campaign  @relation(fields: [campaignId], references: [id])
+  recipientId    String
+  recipient      Recipient @relation(fields: [recipientId], references: [id])
+  instanceId     String
+  instance       Instance  @relation(fields: [instanceId], references: [id])
+  messageContent String? // The final message text sent
+  messagePayload Json? // The full payload sent to Evolution API (including media, buttons, etc.)
+  status         String    @default("attempted") // e.g., attempted, success, api_error, webhook_delivered, webhook_read, webhook_failed
+  details        Json? // Details from API response or webhook event
+  timestamp      DateTime  @default(now())
+
+  @@index([campaignId])
+  @@index([recipientId])
+  @@index([instanceId])
+  @@index([status])
+}
