@@ -1,3 +1,4 @@
+// src/utils/spintax.ts
 import { Logger } from "./logger";
 
 const logger = new Logger("SpintaxProcessor");

@@ -33,24 +33,34 @@ export async function createInstanceInEvolutionAPI(
 			},
 		);
 
-		console.log("✅ Evolution API response:", response.data);
+		const data = response.data as {
+			instance?: { instanceId?: string; status?: string; qrcode?: string };
+			instanceId?: string;
+			status?: string;
+			qrcode?: string;
+			base64?: string;
+			hash?: string;
+			settings?: any;
+		};
+
+		console.log("✅ Evolution API response:", data);
 
 		// A Evolution API pode retornar o QR code diretamente ou em uma propriedade específica
 		return {
 			instanceId:
-				response.data.instance?.instanceId ||
-				response.data.instanceId ||
+				data.instance?.instanceId ||
+				data.instanceId ||
 				params.instanceName,
 			instanceName: params.instanceName,
 			status:
-				response.data.instance?.status || response.data.status || "created",
+				data.instance?.status || data.status || "created",
 			qrcode:
-				response.data.qrcode ||
-				response.data.base64 ||
-				response.data.instance?.qrcode,
-			base64: response.data.base64 || response.data.qrcode,
-			hash: response.data.hash,
-			settings: response.data.settings,
+				data.qrcode ||
+				data.base64 ||
+				data.instance?.qrcode,
+			base64: data.base64 || data.qrcode,
+			hash: data.hash,
+			settings: data.settings,
 		};
 	} catch (error: any) {
 		console.error(
@@ -90,7 +100,8 @@ export async function getInstanceStatus(instanceName: string): Promise<string> {
 			},
 		);
 
-		return response.data.state || response.data.connectionStatus || "unknown";
+		const data = response.data as { state?: string; connectionStatus?: string };
+		return data.state || data.connectionStatus || "unknown";
 	} catch (error) {
 		console.error("Error getting instance status:", error);
 		return "error";
@@ -120,13 +131,18 @@ export async function fetchAllInstances(): Promise<EvolutionInstance[]> {
 			},
 		});
 
-		const instances = response.data.instances || response.data || [];
+		const data = response.data as { instances?: any[] } | any[];
+		const instances = (Array.isArray(data) ? data : data.instances) || [];
 
 		return instances.map((instance: any) => ({
 			id: instance.id || instance.name,
 			name: instance.name || instance.instanceName,
 			connectionStatus:
 				instance.connectionStatus || instance.state || "unknown",
+			instanceId: instance.instanceId || instance.id || instance.name,
+			status: instance.status || instance.connectionStatus || instance.state || "unknown",
+			qrcode: instance.qrcode || instance.base64 || "",
+			base64: instance.base64 || "",
 		}));
 	} catch (error) {
 		console.error("Error fetching all instances:", error);
@@ -146,7 +162,8 @@ export async function getInstanceQRCode(instanceName: string): Promise<string> {
 			},
 		);
 
-		return response.data.qrcode || response.data.base64 || "";
+		const data = response.data as { qrcode?: string; base64?: string };
+		return data.qrcode || data.base64 || "";
 	} catch (error) {
 		console.error("Error getting QR code:", error);
 		throw new Error("Failed to get QR code");

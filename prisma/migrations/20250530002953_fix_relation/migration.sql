@@ -1,20 +1,48 @@
-/*
-  Warnings:
+-- CreateTable
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL,
+    "evoIaUserId" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "isAdmin" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-  - A unique constraint covering the columns `[name]` on the table `Instance` will be added. If there are existing duplicate values, this will fail.
-  - A unique constraint covering the columns `[instanceId]` on the table `Instance` will be added. If there are existing duplicate values, this will fail.
-  - A unique constraint covering the columns `[apiKey]` on the table `Instance` will be added. If there are existing duplicate values, this will fail.
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
 
-*/
--- AlterTable
-ALTER TABLE "Instance" ADD COLUMN     "apiKey" TEXT,
-ADD COLUMN     "instanceId" TEXT,
-ADD COLUMN     "integration" TEXT NOT NULL DEFAULT 'WHATSAPP-BAILEYS',
-ADD COLUMN     "lastSeen" TIMESTAMP(3),
-ADD COLUMN     "lastUsedAt" TIMESTAMP(3),
-ADD COLUMN     "ownerJid" TEXT,
-ADD COLUMN     "profileName" TEXT,
-ADD COLUMN     "profilePictureUrl" TEXT;
+-- CreateTable
+CREATE TABLE "Instance" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "evolutionApiId" TEXT NOT NULL,
+    "instanceId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'created',
+    "integration" TEXT NOT NULL DEFAULT 'WHATSAPP-BAILEYS',
+    "apiKey" TEXT,
+    "profileName" TEXT,
+    "profilePictureUrl" TEXT,
+    "ownerJid" TEXT,
+    "lastSeen" TIMESTAMP(3),
+    "lastUsedAt" TIMESTAMP(3),
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Instance_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ApiToken" (
+    "id" TEXT NOT NULL,
+    "service" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ApiToken_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "Campaign" (
@@ -75,6 +103,33 @@ CREATE TABLE "SendingLog" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "User_evoIaUserId_key" ON "User"("evoIaUserId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Instance_name_key" ON "Instance"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Instance_evolutionApiId_key" ON "Instance"("evolutionApiId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Instance_instanceId_key" ON "Instance"("instanceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Instance_apiKey_key" ON "Instance"("apiKey");
+
+-- CreateIndex
+CREATE INDEX "Instance_userId_idx" ON "Instance"("userId");
+
+-- CreateIndex
+CREATE INDEX "Instance_name_idx" ON "Instance"("name");
+
+-- CreateIndex
+CREATE INDEX "Instance_status_idx" ON "Instance"("status");
+
+-- CreateIndex
 CREATE INDEX "Campaign_userId_idx" ON "Campaign"("userId");
 
 -- CreateIndex
@@ -101,23 +156,8 @@ CREATE INDEX "SendingLog_instanceId_idx" ON "SendingLog"("instanceId");
 -- CreateIndex
 CREATE INDEX "SendingLog_status_idx" ON "SendingLog"("status");
 
--- CreateIndex
-CREATE UNIQUE INDEX "Instance_name_key" ON "Instance"("name");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Instance_instanceId_key" ON "Instance"("instanceId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Instance_apiKey_key" ON "Instance"("apiKey");
-
--- CreateIndex
-CREATE INDEX "Instance_userId_idx" ON "Instance"("userId");
-
--- CreateIndex
-CREATE INDEX "Instance_name_idx" ON "Instance"("name");
-
--- CreateIndex
-CREATE INDEX "Instance_status_idx" ON "Instance"("status");
+-- AddForeignKey
+ALTER TABLE "Instance" ADD CONSTRAINT "Instance_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Campaign" ADD CONSTRAINT "Campaign_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

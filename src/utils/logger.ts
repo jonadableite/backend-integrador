@@ -1,183 +1,207 @@
-import fs from "node:fs";
-import path from "node:path";
 // src/utils/logger.ts
 import dayjs from "dayjs";
-import { configService } from "../config/env.config"; // Importa o serviço de configuração
+import fs from "node:fs";
+import path from "node:path";
+import { configService } from "../config/env.config";
 
+// Helper para formatar o timestamp
 const formatDateLog = (timestamp: number) =>
-	dayjs(timestamp)
-		.toDate()
-		.toString()
-		.replace(/\sGMT.+/, "");
+  dayjs(timestamp).format("YYYY-MM-DD HH:mm:ss.SSS");
 
-enum Color {
-	LOG = "\x1b[32m",
-	INFO = "\x1b[34m",
-	AVISAR = "\x1b[33m",
-	ERROR = "\x1b[31m",
-	DEPURAR = "\x1b[36m",
-	VERBOSE = "\x1b[37m",
-	DARK = "\x1b[30m",
-	WEBHOOKS = "\x1b[35m",
-	WEBSOCKET = "\x1b[38m",
-	RESET = "\x1b[0m",
-	BRIGHT = "\x1b[1m",
-	UNDERSCORE = "\x1b[4m",
+// Padroniza os níveis de log para inglês
+enum LogLevel {
+  LOG = "LOG",
+  INFO = "INFO",
+  WARN = "WARN",
+  ERROR = "ERROR",
+  DEBUG = "DEBUG",
+  VERBOSE = "VERBOSE",
+  DARK = "DARK",
+  WEBHOOKS = "WEBHOOKS", // Adicionado WEBHOOKS
+  WEBSOCKET = "WEBSOCKET", // Adicionado WEBSOCKET
 }
 
-enum Level {
-	LOG = Color.LOG + "%s" + Color.RESET,
-	DARK = Color.DARK + "%s" + Color.RESET,
-	INFO = Color.INFO + "%s" + Color.RESET,
-	AVISAR = Color.AVISAR + "%s" + Color.RESET,
-	ERROR = Color.ERROR + "%s" + Color.RESET,
-	DEPURAR = Color.DEPURAR + "%s" + Color.RESET,
-	VERBOSE = Color.VERBOSE + "%s" + Color.RESET,
-	WEBHOOKS = Color.WEBHOOKS + "%s" + Color.RESET,
-	WEBSOCKET = Color.WEBSOCKET + "%s" + Color.RESET,
-}
+// Mapeamento de níveis para cores ANSI
+const LogLevelColor: Record<LogLevel, string> = {
+  [LogLevel.LOG]: "\x1b[32m", // Verde
+  [LogLevel.INFO]: "\x1b[34m", // Azul
+  [LogLevel.WARN]: "\x1b[33m", // Amarelo
+  [LogLevel.ERROR]: "\x1b[31m", // Vermelho
+  [LogLevel.DEBUG]: "\x1b[36m", // Ciano
+  [LogLevel.VERBOSE]: "\x1b[37m", // Branco (claro)
+  [LogLevel.DARK]: "\x1b[90m", // Cinza escuro
+  [LogLevel.WEBHOOKS]: "\x1b[35m", // Magenta para webhooks
+  [LogLevel.WEBSOCKET]: "\x1b[35m", // Magenta para websockets (pode ser outra cor se preferir)
+};
 
-enum Type {
-	LOG = "LOG",
-	AVISAR = "AVISAR",
-	INFO = "INFO",
-	DARK = "DARK",
-	ERROR = "ERROR",
-	DEPURAR = "DEPURAR",
-	VERBOSE = "VERBOSE",
-}
+// Reset de cor ANSI
+const COLOR_RESET = "\x1b[0m";
+const COLOR_BRIGHT = "\x1b[1m";
 
-enum Background {
-	LOG = "\x1b[42m",
-	INFO = "\x1b[44m",
-	WARN = "\x1b[43m",
-	DARK = "\x1b[40m",
-	ERROR = "\x1b[41m",
-	DEBUG = "\x1b[46m",
-	VERBOSE = "\x1b[47m",
-}
-
-// Tenta ler o package.json, se falhar, usa uma versão padrão
+// Tenta ler o package.json para a versão da aplicação
 let packageJsonVersion = "N/A";
 try {
-	const packageJsonPath = path.join(__dirname, "../../package.json");
-	const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
-	packageJsonVersion = packageJson.version;
-} catch (e) {
-	console.warn("Não foi possível ler package.json para a versão do logger.", e);
+  // Ajusta o caminho para ser relativo ao diretório de execução (geralmente a raiz do projeto)
+  const packageJsonPath = path.join(process.cwd(), "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    packageJsonVersion = packageJson.version || "N/A";
+  } else {
+    console.warn("package.json não encontrado no diretório de execução.");
+  }
+} catch (e: any) {
+  console.warn(
+    `Não foi possível ler package.json para obter a versão: ${e.message}`
+  );
 }
 
-export class Logger {
-	private context: string;
-	private instanceId: string | null = null;
-	// Obtém as configurações de log uma vez na inicialização da classe Logger
-	private readonly enabledLevels: string[];
-	private readonly useColor: boolean;
+// Obtém o PID do processo
+const processId = process.pid;
 
-	constructor(context = "Logger") {
-		this.context = context;
-		// Usa o configService para obter as configurações de log
-		this.enabledLevels = configService.get("LOG.LEVEL");
-		this.useColor = configService.get("LOG.COLOR");
-	}
+// Classe Logger
+class AppLogger {
+  private context: string;
+  private logLevel: LogLevel[];
+  private useColor: boolean;
 
-	public setContext(value: string) {
-		this.context = value;
-	}
+  constructor(context: string) {
+    this.context = context;
+    // Assume que configService já foi carregado e está disponível
+    this.logLevel = configService.get("LOG.LEVEL") as LogLevel[];
+    this.useColor = configService.get("LOG.COLOR") as boolean;
 
-	public setInstance(instanceId: string | null) {
-		this.instanceId = instanceId;
-	}
+    // Loga a versão da aplicação e o PID na inicialização do logger principal (se for o 'App')
+    if (context === "App") {
+      console.log(
+        `App v${packageJsonVersion} PID:${processId} - ${formatDateLog(
+          Date.now()
+        )} [INFO] [${this.context}] Logger inicializado.`
+      );
+    }
+  }
 
-	private console(value: any, type: Type) {
-		// Usa as configurações obtidas no construtor
-		if (!this.enabledLevels.includes(type)) {
-			return;
-		}
+  // Método central para logar no console
+  private console(
+    level: LogLevel,
+    message: any,
+    ...optionalParams: any[]
+  ): void {
+    // Verifica se o nível de log atual está incluído nos níveis configurados
+    if (!this.logLevel.includes(level)) {
+      return; // Não loga se o nível não está permitido
+    }
 
-		const typeValue = typeof value;
-		const timestamp = formatDateLog(Date.now());
-		const processId = process.pid.toString();
-		const instanceTag = this.instanceId ? `[${this.instanceId}]` : "";
-		const contextTag = `[${this.context}]`;
-		const typeTag = `[${typeValue}]`;
-		const message = typeValue !== "object" ? value : "";
+    const timestamp = formatDateLog(Date.now());
+    const levelColor = this.useColor ? LogLevelColor[level] : "";
+    const resetColor = this.useColor ? COLOR_RESET : "";
+    const brightColor = this.useColor ? COLOR_BRIGHT : "";
+    const contextColor = this.useColor ? "\x1b[35m" : ""; // Cor para o contexto
 
-		if (this.useColor) {
-			// Usa a configuração obtida no construtor
-			console.log(
-				`${Color.BRIGHT}${Level[type]}`,
-				`[WhatLead API]`,
-				`${Color.BRIGHT}${Color[type]}`,
-				`${instanceTag}`,
-				`${Color.BRIGHT}${Color[type]}`,
-				`v${packageJsonVersion}`,
-				`${Color.BRIGHT}${Color[type]}`,
-				`${processId}`,
-				`${Color.RESET}`,
-				`${Color.BRIGHT}${Color[type]}`,
-				`-`,
-				`${Color.BRIGHT}${Color.VERBOSE}`,
-				`${timestamp} `,
-				`${Color.RESET}`,
-				`${Color[type]}${Background[type]}${Color.BRIGHT}`,
-				`${type} ${Color.RESET}`,
-				`${Color.WARN}${Color.BRIGHT}`,
-				`${contextTag}${Color.RESET}`,
-				`${Color[type]}${Color.BRIGHT}`,
-				`${typeTag}${Color.RESET}`,
-				`${Color[type]}`,
-				`${message}`,
-				`${Color.RESET}`,
-			);
-			if (typeValue === "object") {
-				console.log(value, "\n");
-			}
-		} else {
-			console.log(
-				`[WhatLead API]`,
-				`${instanceTag}`,
-				`${processId}`,
-				`-`,
-				`${timestamp} `,
-				`${type} `,
-				`${contextTag}`,
-				`${typeTag}`,
-				value,
-			);
-		}
-	}
+    // Formata a mensagem principal
+    const formattedMessage =
+      typeof message === "string"
+        ? message
+        : JSON.stringify(message, null, 2); // Stringify objetos ou outros tipos
 
-	public log(value: any) {
-		this.console(value, Type.LOG);
-	}
+    // Formata os parâmetros opcionais
+    const formattedOptionalParams = optionalParams
+      .map((param) =>
+        typeof param === "string" ? param : JSON.stringify(param, null, 2)
+      )
+      .join(" "); // Junta os parâmetros opcionais com espaço
 
-	public info(value: any) {
-		this.console(value, Type.INFO);
-	}
+    // Monta a linha de log
+    const logLine = `${timestamp} ${brightColor}[${levelColor}${level}${resetColor}${brightColor}]${resetColor} [${contextColor}${this.context}${resetColor}] ${formattedMessage}${
+      formattedOptionalParams ? " " + formattedOptionalParams : ""
+    }`;
 
-	public aviso(value: any) {
-		this.console(value, Type.WARN);
-	}
+    // Usa console.log, console.warn ou console.error dependendo do nível
+    switch (level) {
+      case LogLevel.ERROR:
+        console.error(logLine);
+        break;
+      case LogLevel.WARN:
+        console.warn(logLine);
+        break;
+      default:
+        console.log(logLine);
+        break;
+    }
+  }
 
-	public error(value: any, error: any) {
-		this.console(value, Type.ERROR);
-	}
+  /** Loga uma mensagem informativa geral. */
+  public log(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.LOG, message, ...optionalParams);
+  }
 
-	public verbose(value: any) {
-		this.console(value, Type.VERBOSE);
-	}
+  /** Loga informações importantes sobre o fluxo da aplicação. */
+  public info(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.INFO, message, ...optionalParams);
+  }
 
-	public depurar(value: any) {
-		this.console(value, Type.DEBUG);
-	}
+  /** Loga avisos sobre situações que podem requerer atenção, mas não são erros. */
+  // Corrigido para aceitar optionalParams
+  public warn(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.WARN, message, ...optionalParams);
+  }
 
-	public dark(value: any) {
-		this.console(value, Type.DARK);
-	}
+  /** Loga mensagens de erro e detalhes de exceções. */
+  // Mantido como estava, aceitando um erro opcional como segundo argumento
+  public error(message: any, error?: any, ...optionalParams: any[]): void {
+    if (error instanceof Error) {
+      this.console(LogLevel.ERROR, message, error.stack || error.message, ...optionalParams);
+    } else if (error !== undefined) {
+      this.console(LogLevel.ERROR, message, error, ...optionalParams);
+    } else {
+      this.console(LogLevel.ERROR, message, ...optionalParams);
+    }
+  }
+
+  /** Loga informações detalhadas, úteis para depuração em ambientes de desenvolvimento. */
+  // Corrigido para aceitar optionalParams
+  public debug(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.DEBUG, message, ...optionalParams);
+  }
+
+  /** Loga informações muito detalhadas, para rastreamento profundo. */
+  // Corrigido para aceitar optionalParams
+  public verbose(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.VERBOSE, message, ...optionalParams);
+  }
+
+  /** Loga mensagens com cor escura, útil para logs de baixo nível ou menos importantes. */
+  // Corrigido para aceitar optionalParams
+  public dark(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.DARK, message, ...optionalParams);
+  }
+
+  /** Loga eventos de webhook. */
+  public webhook(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.WEBHOOKS, message, ...optionalParams);
+  }
+
+  /** Loga eventos de websocket. */
+  public websocket(message: any, ...optionalParams: any[]): void {
+    this.console(LogLevel.WEBSOCKET, message, ...optionalParams);
+  }
+
+  // Mantém o método 'depurar' por compatibilidade, mas mapeia para 'debug'
+  public depurar(message: any, ...optionalParams: any[]): void {
+    this.debug(message, ...optionalParams);
+  }
 }
 
-// Exemplo de uso:
-// const logger = new Logger('MeuServico');
-// logger.info('Serviço iniciado.');
-// logger.error('Ocorreu um erro!', new Error('Algo deu errado.'));
+// Cria uma instância do logger principal
+export const appLogger = new AppLogger("App");
+
+// Cria loggers específicos para contextos comuns
+export const campaignLogger = new AppLogger("CampaignQueue");
+export const webhookLogger = new AppLogger("WebhookController");
+export const apiLogger = new AppLogger("ApiController");
+export const dbLogger = new AppLogger("Database");
+export const serviceLogger = new AppLogger("Service");
+export const websocketLogger = new AppLogger("Websocket");
+
+// Exporta a classe para permitir a criação de loggers com contextos personalizados
+export default AppLogger;
+

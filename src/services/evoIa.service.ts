@@ -16,7 +16,7 @@ export async function authenticateWithEvoIA(
 			password,
 		});
 
-		const token = loginResponse.data.access_token;
+		const token = (loginResponse.data as { access_token: string }).access_token;
 
 		// Buscar dados do usuário atual
 		const userResponse = await axios.post(
@@ -31,7 +31,7 @@ export async function authenticateWithEvoIA(
 		);
 
 		return {
-			user: userResponse.data,
+			user: userResponse.data as EvoIAUser,
 			token,
 		};
 	} catch (error) {
@@ -64,7 +64,7 @@ export async function fetchUserFromEvoIA(
 			{ headers },
 		);
 
-		return response.data;
+		return response.data as EvoIAUser;
 	} catch (error) {
 		console.error("Error fetching user from Evo-IA:", error);
 		throw new Error("Failed to fetch user from Evo-IA");
@@ -85,7 +85,7 @@ export async function fetchClientAgents(
 			},
 		});
 
-		return response.data || [];
+		return Array.isArray(response.data) ? response.data : [];
 	} catch (error) {
 		console.error("Error fetching agents from Evo-IA:", error);
 		return [];

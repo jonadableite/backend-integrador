@@ -1,6 +1,7 @@
 // src/routes/webhook.routes.ts
 import { PrismaClient } from "@prisma/client";
 import { type Request, type Response, Router } from "express";
+import { webhookController } from '../controllers/webhook.controller';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -68,5 +69,7 @@ router.post(
 		return res.status(200).json({ success: true });
 	}),
 );
+
+router.post('/evolution', webhookController.handleWebhook);
 
 export default router;

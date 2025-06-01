@@ -7,6 +7,7 @@ import helmet from "helmet";
 
 // Importar rotas
 import authRoutes from "./routes/auth.routes";
+import campaignRoutes from "./routes/campaign.routes";
 import evoapiRoutes from "./routes/evoapi.routes";
 import evolutionRoutes from "./routes/evolution.routes";
 import integrationRoutes from "./routes/integration.routes";
@@ -35,6 +36,7 @@ app.use("/api/evoapi", evoapiRoutes);
 app.use("/api/evolution", evolutionRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/integration", integrationRoutes);
+app.use("/api/campaigns", campaignRoutes);
 
 // Rotas de compatibilidade (redirecionar algumas rotas da Evo-IA para o integrador)
 app.use("/api/v1/auth", integrationRoutes);
